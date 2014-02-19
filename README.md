@@ -21,6 +21,7 @@ You need to specify the environment variables
 * N_THREADS
 
 before executing benchmark.py. In Python this can be with e.g.
+
     os.environ['JOBLIB_ROOT'] = '../working/joblib'
     os.environ['TEXTURE_DATA_ROOT'] = '../data'
     os.environ['VERBOSITY'] = '10'
