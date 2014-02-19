@@ -12,7 +12,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 from joblib import Memory
-memory = Memory(cachedir=os.environ['JOBLIB_ROOT'],
+memory = Memory(cachedir=os.environ['CACHE_ROOT'],
                 verbose=int(os.environ['VERBOSITY']))
 #memory.clear()
 

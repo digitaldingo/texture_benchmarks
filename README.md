@@ -13,16 +13,17 @@
 
 ## Setup
 
-You need to specify the environment variables
+You need to specify the following environment variables before executing
+benchmark.py.
 
-* JOBLIB_ROOT
+* CACHE_ROOT
 * TEXTURE_DATA_ROOT
 * VERBOSITY
 * N_THREADS
 
-before executing benchmark.py. In Python this can be with e.g.
+In Python this can be done with:
 
-    os.environ['JOBLIB_ROOT'] = '../working/joblib'
+    os.environ['CACHE_ROOT'] = '../cache'
     os.environ['TEXTURE_DATA_ROOT'] = '../data'
     os.environ['VERBOSITY'] = '10'
     os.environ['N_THREADS'] = '8'
