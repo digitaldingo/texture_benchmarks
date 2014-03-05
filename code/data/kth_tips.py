@@ -41,7 +41,10 @@ class KTH_TIPS(BaseDataset):
         self.data_dir = os.path.join(self._data_root, self.name)
         self._download_data(_URLS, self.data_dir, sha1s=_SHA1S)
         self.labels = np.hstack([np.ones(self.n_imgs_per_class) * i
-                                 for i in range(self.n_classes)])
+                                 for i in range(self.n_classes)]).astype(int)
+
+    def label(self, i):
+        return self.labels[i]
 
     def img(self, i):
         class_no = i / self.n_imgs_per_class
@@ -58,7 +61,7 @@ class KTH_TIPS(BaseDataset):
     def imgs(self):
         return np.array(map(self.img, range(self.n_imgs)))
 
-    def splits(self, n_train_class_imgs=40, n_splits=5, random_state=0):
+    def splits(self, n_train_class_imgs=40, n_splits=100, random_state=0):
         train_size = float(n_train_class_imgs)/self.n_imgs_per_class
         test_size = 1-train_size
         s = StratifiedShuffleSplit(self.labels, n_iter=n_splits,

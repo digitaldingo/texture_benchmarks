@@ -2,21 +2,14 @@ import numpy as np
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
-from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics.pairwise import chi2_kernel, additive_chi2_kernel
 
 from sklearn.base import BaseEstimator
 from sklearn.pipeline import Pipeline
 
 
-def bhattacharyya_kernel(x, y):
+def bhattacharyya(x, y):
     return (1 - np.dot(np.sqrt(x), np.sqrt(y.T)))**2
-
-
-class BIF_KNNClassifier(KNeighborsClassifier):
-    def __init__(self, k=5):
-        super(BIF_KNNClassifier, self).__init__(n_neighbors=k,
-                                                metric=chi2_kernel)
 
 
 class SVMClassifier(BaseEstimator):

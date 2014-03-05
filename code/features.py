@@ -1,12 +1,13 @@
 import os
 import numpy as np
+import scipy as sp
 
 from skimage.feature import greycomatrix, greycoprops
 from skimage.feature import local_binary_pattern
 from sklearn.base import BaseEstimator
 from joblib import Parallel, delayed
 
-from ipcv import si_hist, bif_hist
+from ipcv import si_hist, josi_hist, bif_hist
 
 
 class Haralick(BaseEstimator):
@@ -32,6 +33,7 @@ class Haralick(BaseEstimator):
 class BasicImageFeatures(BaseEstimator):
     def __init__(self, opts):
         self.opts = opts
+        self.name = 'bif'
 
     def transform(self, X):
         return bif_hist(X, **self.opts)
@@ -59,9 +61,23 @@ class LBP(BaseEstimator):
 class ShapeIndexHistograms(BaseEstimator):
     def __init__(self, opts):
         self.opts = opts
+        self.name = 'sih'
 
     def transform(self, X):
         return np.ravel(si_hist(X, **self.opts))
+
+
+class OrientedShapeIndexHistograms(BaseEstimator):
+    def __init__(self, opts):
+        self.opts = opts
+
+    def transform(self, X):
+        sp.misc.imsave('img.png', X)
+        hists = josi_hist(X, **self.opts)
+        print(hists.shape)
+        for i in range(hists.shape[2]):
+            print(hists[..., i].shape)
+            sp.misc.imsave('josi_%i.png' % i, hists[..., i])
 
 
 def _transform_one(estimator, X):
@@ -71,6 +87,7 @@ def _transform_one(estimator, X):
 class ParallelEstimator(BaseEstimator):
     def __init__(self, estimator):
         self.estimator = estimator
+        self.name = estimator.name
 
     def transform(self, X):
         n_threads = int(os.environ['N_THREADS'])

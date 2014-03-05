@@ -52,7 +52,10 @@ class UIUCTex(BaseDataset):
         self.data_dir = os.path.join(self._data_root, self.name)
         self._download_data(_URLS, self.data_dir, sha1s=_SHA1S)
         self.labels = np.hstack([np.ones(self.n_imgs_per_class) * i
-                                 for i in range(self.n_classes)])
+                                 for i in range(self.n_classes)]).astype(int)
+
+    def label(self, i):
+        return self.labels[i]
 
     def img(self, i):
         class_no = i / self.n_imgs_per_class
