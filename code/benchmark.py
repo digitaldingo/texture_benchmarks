@@ -73,14 +73,35 @@ def run():
         'norm': 'l1',
     }
 
-    feat_ex = features.BasicImageFeatures(opts_bif)
+#    feat_ex = features.BasicImageFeatures(opts_bif)
     feat_ex = features.ShapeIndexHistograms(opts_sih)
+
+    feat_ex = features.OrientedShapeIndexHistograms(**{
+        'scales': 1*2.0**np.arange(5),
+        'n_bins': 18,
+        'tonal_scale': .2,
+        'ori_n_bins': 8,
+        'ori_tonal_scale': 0.25,
+        'ori_detect_scale': 4,
+        'norm': 'l1',
+        'joint_hist': True,
+    })
     feat_ex = features.ParallelEstimator(feat_ex)
+
 
     # Select classifier
     classifier = classification.SVMClassifier(C=200, kernel='rbf')
 #    classifier = sklearn.neighbors.KNeighborsClassifier(n_neighbors=1,
 #        metric='manhattan')
+
+
+#    imgs = memory.cache(dataset.imgs)()
+#    feats = feat_ex.transform(imgs)
+#    entropies = []
+#    for i in range(feats.shape[0]):
+#        entropies.append(features.entropy(feats[i], 1))
+#    print(np.min(feats), np.max(feats), np.mean(feats))
+#    print(np.min(entropies), np.max(entropies), np.mean(entropies))
 
     # Select classifier
     cross_validate(dataset, feat_ex, classifier)

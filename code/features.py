@@ -7,8 +7,8 @@ from skimage.feature import local_binary_pattern
 from sklearn.base import BaseEstimator
 from joblib import Parallel, delayed
 
+import ipcv
 from ipcv import si_hist, josi_hist, bif_hist
-
 
 class Haralick(BaseEstimator):
     def __init__(self, opts):
@@ -59,6 +59,7 @@ class LBP(BaseEstimator):
 
 
 class ShapeIndexHistograms(BaseEstimator):
+    name = 'sih'
     def __init__(self, opts):
         self.opts = opts
         self.name = 'sih'
@@ -68,16 +69,56 @@ class ShapeIndexHistograms(BaseEstimator):
 
 
 class OrientedShapeIndexHistograms(BaseEstimator):
-    def __init__(self, opts):
-        self.opts = opts
+    name = 'osih'
 
-    def transform(self, X):
-        sp.misc.imsave('img.png', X)
-        hists = josi_hist(X, **self.opts)
-        print(hists.shape)
-        for i in range(hists.shape[2]):
-            print(hists[..., i].shape)
-            sp.misc.imsave('josi_%i.png' % i, hists[..., i])
+    def __init__(self, scales, n_bins, tonal_scale, ori_n_bins,
+                 ori_tonal_scale, ori_detect_scale, norm, joint_hist,
+                 flat=True):
+        args = locals().copy()
+        del args['self']
+        self.__dict__.update(args)
+
+    def transform(self, img):
+        hists_shape = (self.n_bins, self.ori_n_bins, len(self.scales))
+        hists = np.empty(hists_shape)
+
+        si, si_c, si_o, si_om = ipcv.shape_index(img, self.ori_detect_scale, orientations=True)
+        # Detect dominant orientation
+        ori_detect_n_bins = self.ori_n_bins*2
+        iso_si_o = ipcv.misc.isophotes(si_o, ori_detect_n_bins, (-np.pi/2, np.pi/2),
+                             self.ori_tonal_scale, 'von_mises')
+        ori_hist = np.sum(iso_si_o, axis=(1,2))
+        ori_hist /= np.sum(ori_hist)
+#        print(ori_hist)
+        max_idx = np.argmax(ori_hist)
+        ori_offset = max_idx/float(ori_detect_n_bins)*np.pi-np.pi/2
+#        print(max_idx, max_idx/float(ori_detect_n_bins), ori_offset)
+
+        for s_idx, s in enumerate(self.scales):
+            si, si_c, si_o, si_om = ipcv.shape_index(img, s, orientations=True)
+            # Shift according to dominant orientation
+            si_o = np.mod(si_o-ori_offset+np.pi/2, np.pi)-np.pi/2
+            # Smooth bin contributions (= soft isophote images)
+            iso_si = ipcv.misc.isophotes(si, self.n_bins, (-np.pi/2, np.pi/2), 
+                               self.tonal_scale)
+            iso_si_o = ipcv.misc.isophotes(si_o, self.ori_n_bins, (-np.pi/2, np.pi/2),
+                                 self.ori_tonal_scale, 'von_mises')
+            # Bin contributions for the joint histogram
+            iso_j = (iso_si[:, np.newaxis, ...] * si_c
+                     * iso_si_o[np.newaxis, ...] * si_om)
+            # Summarize bin contributions in the joint histograms
+            hists[:, :, s_idx] = np.sum(iso_j, axis=(2, 3))
+        if not self.joint_hist:
+            hists_si = np.sum(hists, axis=1)
+            hists_ori = np.sum(hists, axis=0)
+            hists_si = ipcv.misc.normalize(hists_si, self.norm)
+            hists_ori = ipcv.misc.normalize(hists_ori, self.norm)
+            hists = np.hstack([np.ravel(hists_si), np.ravel(hists_ori)])
+        else:
+            hists = ipcv.misc.normalize(hists, self.norm)
+        if self.flat:
+            hists = np.ravel(hists)
+        return hists
 
 
 def _transform_one(estimator, X):
@@ -97,3 +138,41 @@ class ParallelEstimator(BaseEstimator):
             for i in range(X.shape[0]))
         features = np.array(features)
         return features
+
+
+
+def intensity_hist(img, scale, n_bins, tonal_scale):
+    if np.min(img) < 0 or np.max(img) > 1:
+        raise ValueError('Invalid image intensities; should be in [0,1].')
+    img = ipcv.scalespace(img, scale)
+    limits = (0, 1)
+    img_iso = ipcv.misc.isophotes(img, n_bins, limits, tonal_scale, 'gaussian')
+    hist = np.sum(img_iso, axis=(1,2))    
+    hist /= np.sum(hist)
+    return hist
+
+
+def shape_index_hist(img, scale, n_bins, tonal_scale):
+    si, si_c = ipcv.shape_index(img, scale, orientations=False)
+#    sp.misc.imsave('woop%.2f.png' % scale, si)
+    limits = (-np.pi/2, np.pi/2)
+    si_iso = ipcv.misc.isophotes(si, n_bins, limits, tonal_scale)
+    hist = np.sum(si_iso * si_c, axis=(1,2))
+    hist /= np.sum(hist)
+    return hist
+
+
+def gradient_hist(img, scale, n_bins, tonal_scale):
+    go, go_m = ipcv.gradient_orientation(img, scale)
+#    sp.misc.imsave('woop%.2f.png' % scale, si)
+    limits = (-np.pi/2, np.pi/2)
+    go_iso = ipcv.misc.isophotes(go, n_bins, limits, tonal_scale)
+    hist = np.sum(go_iso * go_m, axis=(1,2))
+    hist /= np.sum(hist)
+    return hist
+
+def entropy(hist, alpha):
+    if alpha == 1.0:
+        return -np.sum(hist * np.log(hist))
+    else:
+        return 1/(1.0-alpha)*np.log(np.sum(hist**alpha))
