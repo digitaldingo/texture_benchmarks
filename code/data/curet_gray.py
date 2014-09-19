@@ -1,4 +1,5 @@
 import os
+import itertools
 import numpy as np
 from scipy.misc import imread
 from sklearn.cross_validation import StratifiedShuffleSplit
@@ -35,6 +36,27 @@ IMG_NOS = [
     165, 175, 178, 179, 181, 183,
 ]
 
+
+#def grouper(iterable, n, fillvalue=None):
+#    "Collect data into fixed-length chunks or blocks"
+#    # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx
+#    args = [iter(iterable)] * n
+#    return itertools.izip_longest(fillvalue=fillvalue, *args)
+
+def grouper(n, iterable):
+    it = iter(iterable)
+    while True:
+       chunk = tuple(itertools.islice(it, n))
+       if not chunk:
+           return
+       yield chunk
+
+def chunks(l, n):
+    """
+    Yield successive n-sized chunks from l.
+    """
+    for i in xrange(0, len(l), n):
+        yield l[i:i+n]
 
 class CUReTGray(BaseDataset):
     """
@@ -79,7 +101,13 @@ class CUReTGray(BaseDataset):
         return img
 
     def imgs(self):
+        #return np.array([self.img(i) for i in range(self.n_imgs)])
         return np.array(map(self.img, range(self.n_imgs)))
+
+    def imgs_in_chunks(self, chunk_size=100):
+        imgs = chunks(map(self.img, range(self.n_imgs)), chunk_size)
+        #return grouper(chunk_size, map(self.img, range(self.n_imgs)))
+        return list(imgs)
 
     def splits(self, n_train_class_imgs=43, n_splits=5, random_state=0):
         train_size = float(n_train_class_imgs)/self.n_imgs_per_class

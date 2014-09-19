@@ -2,6 +2,12 @@
 # coding: utf-8
 
 import os
+os.environ['CACHE_ROOT'] = '../cache'
+os.environ['TEXTURE_DATA_ROOT'] = '../data'
+os.environ['RESULTS_ROOT'] = '../results'
+os.environ['VERBOSITY'] = '10'
+os.environ['N_THREADS'] = '3'
+
 import numpy as np
 
 import data
@@ -23,7 +29,8 @@ def cross_validate(dataset, feat_ex, classifier):
     imgs = memory.cache(dataset.imgs)()
 
     print('# Feature description')
-    feats = memory.cache(feat_ex.transform)(imgs)
+    #feats = memory.cache(feat_ex.transform)(imgs)
+    feats = memory.cache(feat_ex.fit_transform)(imgs)
     print('Feature dimensions:', feats.shape[1])
 
     print('# Classification')
@@ -55,9 +62,9 @@ def cross_validate(dataset, feat_ex, classifier):
 
 def run():
     # Select dataset
-#    dataset = data.CUReTGray()
+    dataset = data.CUReTGray()
 #    dataset = data.KTH_TIPS()
-    dataset = data.UIUCTex()
+#    dataset = data.UIUCTex()
 
     # Select feature extractor
     opts_bif = {
@@ -88,11 +95,21 @@ def run():
     })
     feat_ex = features.ParallelEstimator(feat_ex)
 
+    feat_ex = features.MR8FilterBank()
 
     # Select classifier
     classifier = classification.SVMClassifier(C=200, kernel='rbf')
 #    classifier = sklearn.neighbors.KNeighborsClassifier(n_neighbors=1,
 #        metric='manhattan')
+    # TODO: it might not be a bad idea to inclue a build-method, which would be
+    # needed to be run after instantiating the classifier. That would make it a
+    # lot faster to train.
+    # Alternative: use memory.cache to store the output of the building step!
+    classifier = classification.VarmaZissermanClassifier(
+        build_classes = [1, 4, 6, 10, 12, 14, 16, 18, 20, 22, 25, 27, 30, 33,
+                         35, 41, 45, 48, 50, 59],
+        train_classes = [2, 3, 5,  7,  8,  9, 15, 17, 19, 21, 24, 36, 37, 39,
+                         43, 44, 47, 52, 54, 58])
 
 
 #    imgs = memory.cache(dataset.imgs)()
