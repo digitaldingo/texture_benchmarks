@@ -5,7 +5,7 @@ import os
 os.environ['CACHE_ROOT'] = '../cache'
 os.environ['TEXTURE_DATA_ROOT'] = '../data'
 os.environ['RESULTS_ROOT'] = '../results'
-os.environ['VERBOSITY'] = '10'
+os.environ['VERBOSITY'] = '0'
 os.environ['N_THREADS'] = '3'
 
 import numpy as np
@@ -21,8 +21,8 @@ logging.basicConfig(level=logging.INFO)
 from joblib import Memory
 memory = Memory(cachedir=os.environ['CACHE_ROOT'],
                 verbose=int(os.environ['VERBOSITY']))
-#memory.clear()
 
+OUTPUTFILE = "uiuctex_cv_1.txt"
 
 def cross_validate(dataset, feat_ex, classifier):
     print('# Loading dataset')
@@ -30,21 +30,21 @@ def cross_validate(dataset, feat_ex, classifier):
 
     print('# Feature description')
     #feats = memory.cache(feat_ex.transform)(imgs)
-    feats = memory.cache(feat_ex.fit_transform)(imgs)
-    print('Feature dimensions:', feats.shape[1])
+    feats = feat_ex.fit_transform(imgs)
+    print('Feature dimensions:', feats.shape)
 
     print('# Classification')
     labels = dataset.labels
     splits = dataset.splits()
-    split_ids = range(len(splits))
+    #split_ids = range(len(splits))
     accuracies = []
     y_preds = []
     y_tests = []
     idxs = []
-    for k, (train_idx, test_idx) in zip(split_ids, splits):
-        x_train = feats[train_idx, :]
+    for k, (train_idx, test_idx) in enumerate(splits):
+        x_train = np.asarray(feats[train_idx])
         y_train = labels[train_idx]
-        x_test = feats[test_idx, :]
+        x_test = np.asarray(feats[test_idx])
         y_test = labels[test_idx]
         classifier.fit(x_train, y_train)
         y_pred = classifier.predict(x_test)
@@ -53,18 +53,25 @@ def cross_validate(dataset, feat_ex, classifier):
         y_preds.append(y_pred)
         y_tests.append(y_test)
         idxs.append(test_idx)
+        print("Accuracy for split {}: {:.4f}".format(k, accuracy))
+
+        with open(OUTPUTFILE, 'a') as f:
+            f.write("- Accuracy, split {}: {}\n".format(k,accuracy))
     mean = np.mean(accuracies)
     std = np.std(accuracies)
     plots.difficult_imgs(dataset, feat_ex, feats, idxs, y_tests, y_preds)
     print('%s, avg. accuracy: %.4f +/- %.4f' % (dataset.name, mean, std))
+    with open(OUTPUTFILE, 'a') as f:
+        f.write("=== Average accuray: {} +/- {}\n".format(np.mean(accuracies),
+                                                    np.std(accuracies)))
     return mean
 
 
 def run():
     # Select dataset
-    dataset = data.CUReTGray()
+#    dataset = data.CUReTGray()
 #    dataset = data.KTH_TIPS()
-#    dataset = data.UIUCTex()
+    dataset = data.UIUCTex()
 
     # Select feature extractor
     opts_bif = {
@@ -93,23 +100,33 @@ def run():
         'norm': 'l1',
         'joint_hist': True,
     })
-    feat_ex = features.ParallelEstimator(feat_ex)
 
     feat_ex = features.MR8FilterBank()
+    feat_ex = features.ParallelEstimator(feat_ex)
 
     # Select classifier
-    classifier = classification.SVMClassifier(C=200, kernel='rbf')
+#    classifier = classification.SVMClassifier(C=200, kernel='rbf')
 #    classifier = sklearn.neighbors.KNeighborsClassifier(n_neighbors=1,
 #        metric='manhattan')
-    # TODO: it might not be a bad idea to inclue a build-method, which would be
-    # needed to be run after instantiating the classifier. That would make it a
-    # lot faster to train.
-    # Alternative: use memory.cache to store the output of the building step!
-    classifier = classification.VarmaZissermanClassifier(
-        build_classes = [1, 4, 6, 10, 12, 14, 16, 18, 20, 22, 25, 27, 30, 33,
-                         35, 41, 45, 48, 50, 59],
-        train_classes = [2, 3, 5,  7,  8,  9, 15, 17, 19, 21, 24, 36, 37, 39,
-                         43, 44, 47, 52, 54, 58])
+
+
+    build_classes = np.array([1, 4, 6, 10, 12, 14, 16, 18, 20, 22, 25, 27, 30,
+                              33, 35, 41, 45, 48, 50, 59]) - 1
+
+    # Experiment 1:
+    train_classes = np.array([2, 3, 5,  7,  8,  9, 15, 17, 19, 21, 24, 36, 37,
+                              39, 43, 44, 47, 52, 54, 58]) - 1
+
+    # Experiment 2:
+    #train_classes = np.array([1, 4, 6, 10, 12, 14, 16, 18, 20, 22, 25, 27, 30,
+    #                          33, 35, 41, 45, 48, 50, 59, 3, 5, 8, 11, 13, 15,
+    #                          17, 19, 21, 24, 26, 28, 32, 34, 37, 43, 47, 49,
+    #                          52, 60]) - 1
+
+
+    #classifier = classification.VarmaZissermanClassifier(
+    #    build_classes = build_classes, train_classes = train_classes)
+    classifier = classification.VarmaZissermanClassifier()
 
 
 #    imgs = memory.cache(dataset.imgs)()

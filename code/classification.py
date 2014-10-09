@@ -1,11 +1,9 @@
 import os
 
 import joblib
-from joblib import Parallel, delayed
-from joblib import Memory
+from joblib import Parallel, delayed, Memory
 memory = Memory(cachedir=os.environ['CACHE_ROOT'],
                 verbose=int(os.environ['VERBOSITY']),
-                mmap_mode='r',
                 )
 
 import numpy as np
@@ -20,9 +18,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.cluster import MiniBatchKMeans as k_means
 
 from features import TextureModel
-
-from IPython import embed
-from profilehooks import profile
 
 
 def bhattacharyya(x, y):
@@ -69,6 +64,7 @@ class SVMClassifier(BaseEstimator):
 def cache_clustering(method, X):
     return method._cluster_responses(X)
 
+
 def clustering_wrapper(method, X):
     return cache_clustering.call_and_shelve(method, X)
 
@@ -77,11 +73,11 @@ def clustering_wrapper(method, X):
 def cache_texture_fit(texture_model, X):
     return texture_model.fit(X)
 
+
 def texture_fit_wrapper(texture_model, X):
     return cache_texture_fit.call_and_shelve(texture_model, X)
 
 
-#@memory.cache
 def compute_dists(model, ref_models):
     if type(model) == joblib.memory.MemorizedResult:
         model = model.get()
@@ -90,8 +86,8 @@ def compute_dists(model, ref_models):
 
 
 class VarmaZissermanClassifier(BaseEstimator):
-    def __init__(self, build_classes, train_classes, n_build=13, n_clusters=10,
-                 use_all_classes=False):
+    def __init__(self, build_classes=None, train_classes=None, n_build=13,
+                 n_clusters=10, use_all_classes=False):
 
         self.build_classes = build_classes
         self.train_classes = train_classes
@@ -102,35 +98,42 @@ class VarmaZissermanClassifier(BaseEstimator):
 
     def fit(self, X, y):
 
+        # ========================= Building phase =========================
+
         for el in X:
             if type(el) not in (np.ndarray, joblib.memory.MemorizedResult):
                 raise TypeError("Input must be a list of ndarrays or "
                                 "MemorizedResult instances containing image "
                                 "responses.")
 
-        # TODO: Check that build_classes + train_classes (if ints) sum to the
-        # total number of classes (or is less).
+        if self.build_classes is None:
+            self.build_classes = np.unique(y)
 
-        # Find build images:
+        if self.train_classes is None:
+            self.train_classes = np.unique(y)
+
+        # Find images for dictionary building:
         build_images = {}
         # TODO: Reduce the if statements.
         if type(self.build_classes) == int:
             for i,tclass in enumerate(y):
                 if len(build_images.keys()) < self.build_classes:
 
-                    # Ensure the key exists:
+                    # Ensure the key exists and add the image if we haven't
+                    # reached the number of building images for that class:
                     if len(build_images.setdefault(tclass, [])) < self.n_build:
                         build_images[tclass].append(i)
 
                 elif tclass in build_images.keys() and \
-                    len(build_images[tclass]) < self.n_build:
+                        len(build_images[tclass]) < self.n_build:
                     build_images[tclass].append(i)
 
         elif type(self.build_classes) in (list, np.ndarray):
             for i,tclass in enumerate(y):
                 if tclass in self.build_classes:
 
-                    # Ensure the key exists:
+                    # Ensure the key exists and add the image if we haven't
+                    # reached the number of building images for that class:
                     if len(build_images.setdefault(tclass, [])) < self.n_build:
                         build_images[tclass].append(i)
 
@@ -141,59 +144,36 @@ class VarmaZissermanClassifier(BaseEstimator):
 
         n_threads = int(os.environ['N_THREADS'])
         verbosity = int(os.environ['VERBOSITY'])
-        # FIXME: need to wrap the wrapper like when calculating responses.
-        #clustering = memory.cache(self._cluster_responses)
-        #tmp_clustering = memory.cache(wrapper).call_and_shelve
-        #clustering = tmp_clustering
         textons = Parallel(n_jobs=n_threads, verbose=verbosity)(
             delayed(clustering_wrapper)(self, X[images]) for
             tclass,images in build_images.items())
 
-        ## Set up the multiprocessing pool:
-        #pool = mp.Pool()
-
-        #textons = []
-        #for tclass,images in build_images.items():
-        #    # Do asynchronous parallel clustering.
-        #    textons.append(pool.apply_async(self._cluster_responses,
-        #                                    [X[images]]))
-
-        #pool.close()
-        #pool.join()
-
-        #for t in textons:
-        #    self.add_textons(t.get())
-        #for t,texton in enumerate(textons):
-        #    textons[t] = texton.get()
-        #self.textons = textons
         self.textons = np.array([t for texton in textons for t in texton.get()])
 
-        #embed()
 
-        # == Training phase:
-        # TODO: switch to joblib
-        #pool = mp.Pool()
+        # ========================= Training phase =========================
 
         model_idx = []
         labels = []
         tm = TextureModel(self.textons)
+
         # TODO: Reduce the if statements.
         if type(self.train_classes) == int and not self.use_all_classes:
             for i,tclass in enumerate(y):
                 if tclass in labels or (len(np.unique(labels)) <
                                         self.train_classes):
                     if tclass not in build_images.keys():
-                        #models.append(pool.apply_async(tm.fit, [X[i]]))
                         model_idx.append(i)
                         labels.append(tclass)
 
-        if type(self.train_classes) == int and self.use_all_classes:
+        elif type(self.train_classes) == int and self.use_all_classes:
             for i,tclass in enumerate(y):
                 if tclass in labels or (len(np.unique(labels)) <
                                         self.train_classes):
                     if i not in build_images[tclass]:
                         # Don't include images that were used in the building
                         # phase.
+                        # FIXME: is this the intended behaviour?
                         model_idx.append(i)
                         labels.append(tclass)
 
@@ -203,40 +183,28 @@ class VarmaZissermanClassifier(BaseEstimator):
                     if i not in build_images[tclass]:
                         # Don't include images that were used in the building
                         # phase.
-                        #models.append(pool.apply_async(tm.fit, [X[i]]))
+                        # FIXME: is this the intended behaviour?
                         model_idx.append(i)
                         labels.append(tclass)
 
                 elif tclass in self.train_classes:
-                    #models.append(pool.apply_async(tm.fit, [X[i]]))
                     model_idx.append(i)
                     labels.append(tclass)
 
         else:
             raise TypeError("train_classes must be either an integer or a list")
 
-        #embed()
-        #stop
-
-        #texture_fit = memory.cache(texture_fit_wrapper)
         models = Parallel(n_jobs=n_threads, verbose=verbosity)(
             delayed(texture_fit_wrapper)(tm, X[idx]) for idx in model_idx)
-        #models = np.array([texture_fit(tm, X[idx]) for idx in model_idx])
 
-
-        #pool.close()
-        #pool.join()
 
         self.models = np.empty((len(models), len(self.textons)))
         for m,model in enumerate(models):
             self.models[m] = model.get()
-        #self.models = models
-        #embed()
 
         self.y = np.asarray(labels)
 
 
-    #@profile
     def predict(self, X):
         """
         Predict the class of an image by finding the nearest model in the
@@ -247,7 +215,11 @@ class VarmaZissermanClassifier(BaseEstimator):
         tm = TextureModel(self.textons)
 
         # FIXME: handle the test for type better.
-        if len(np.shape(X)) == 2 and type(X[0]) != joblib.memory.MemorizedResult:
+        #if len(np.shape(X)) == 2:# and type(X[0]) != joblib.memory.MemorizedResult:
+        if len(np.shape(X)) == 2 and all([type(x) !=
+                                          joblib.memory.MemorizedResult for x in
+                                          X]):
+
             # Generate the model of the new image:
             model = tm.fit(X)
 
@@ -260,45 +232,21 @@ class VarmaZissermanClassifier(BaseEstimator):
 
             return label
 
-        elif len(np.shape(X)) == 3 or type(X[0]) == joblib.memory.MemorizedResult:
+        #elif len(np.shape(X)) == 3 or type(X[0]) == joblib.memory.MemorizedResult:
+        elif len(np.shape(X)) == 3 or any([type(x) ==
+                                           joblib.memory.MemorizedResult for x
+                                           in X]):
+
             # Generate models of the new images:
             n_threads = int(os.environ['N_THREADS'])
             verbosity = int(os.environ['VERBOSITY'])
-            #if type(X[0]) == joblib.memory.MemorizedResult:
-            #    images = []
-            #    for image in X:
-            #        images.append(image.get())
-            #        del image
 
-            #    models = Parallel(n_jobs=n_threads, verbose=verbosity)(
-            #        delayed(cache_texture_fit)(tm, image) for image in images)
-            #else:
-            #    models = Parallel(n_jobs=n_threads, verbose=verbosity)(
-            #        delayed(cache_texture_fit)(tm, image) for image in X)
-
-            #print "Fitting to textures...",
             models = Parallel(n_jobs=n_threads, verbose=verbosity)(
                 delayed(texture_fit_wrapper)(tm, image) for image in X)
-                #delayed(cache_texture_fit)(tm, image) for image in X)
-            #print(" done!")
 
             # Find the nearest learned model:
-            # TODO: joblib
-            #dists = []
-            #for model in models:
-            #    model = model.get()
-            #    dists.append([st.chisquare(model + 1, m + 1) for m in self.models])
-
-            #embed()
-            #stop
-
-            #print "Computing distances to textures...",
-            #dists = Parallel(n_jobs=n_threads, verbose=verbosity)(
-            #    delayed(compute_dists)(model, self.models) for model in models)
-
-            dists = np.array([compute_dists(model, self.models) for model in models])
-            #embed()
-            #print(" done!")
+            dists = np.array([compute_dists(model, self.models) for model in
+                              models])
             nearest = np.argmin(dists, axis=1)
 
             # Return the labels of the nearest models:
@@ -318,39 +266,12 @@ class VarmaZissermanClassifier(BaseEstimator):
                               images], dtype=np.float64)
         del images
 
-        #for i, image in enumerate(images):
-        #    if type(image) is  joblib.memory.MemorizedResult:
-        #        images[i] = image.get()
 
-        #print(np.shape(images[0]))
-        #print(type(images[0]))
-        #embed()
-
-        # TODO: reshape to get only 8D responses
-        #responses = np.reshape(images,
-        #                       (np.shape(images)[0] * np.shape(images)[1],
-        #                        np.shape(images)[2]))
-        #responses = np.reshape(responses,
-        #                       (np.shape(responses)[0] * np.shape(responses)[2]
-        #                        * np.shape(responses)[3],
-        #                        np.shape(responses)[1]))
         d = responses.shape
         responses = np.rollaxis(responses, 1, 4).reshape((d[0] * d[2] * d[3],
                                                           d[1]))
 
-        # Note: responses needs to be float64 due to a bug in scikit-learn's
-        # K Means clustering.
-        #responses = responses.astype(np.float64)
-        #embed()
-
         clusters = k_means(n_clusters=self.n_clusters)
         clusters.fit(responses)
-        #embed()
 
         return clusters.cluster_centers_
-
-        #rs = ResponseSpace()
-        #rs.add_responses(images)
-        #rs.cluster(nclusters=self.nclusters)
-        #return rs.clusters
-
