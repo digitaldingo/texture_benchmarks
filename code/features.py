@@ -301,15 +301,15 @@ class TextureModel(BaseEstimator):
         """
 
         if type(X) == joblib.memory.MemorizedResult:
-            responses = X.get()
+            r = X.get()
             del X
         else:
-            responses = X
+            r = X
 
         # Transform the response images to a list of 8 dimensional pixel
         # responses.
-        d = responses.shape
-        responses = np.rollaxis(responses, 0, 3).reshape((d[1] * d[2], d[0]))
+        d = r.shape
+        responses = np.rollaxis(r, 0, 3).reshape((d[1] * d[2], d[0]))
 
 
         # For each pixel response, find the nearest texton:
