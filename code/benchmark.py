@@ -8,6 +8,8 @@ os.environ['RESULTS_ROOT'] = '../results'
 os.environ['VERBOSITY'] = '0'
 os.environ['N_THREADS'] = '3'
 
+from time import strftime
+
 import numpy as np
 
 import data
@@ -20,11 +22,13 @@ logging.basicConfig(level=logging.INFO)
 
 from joblib import Memory
 memory = Memory(cachedir=os.environ['CACHE_ROOT'],
-                verbose=int(os.environ['VERBOSITY']))
+                verbose=int(os.environ['VERBOSITY']),
+                mmap_mode='r',)
 
 OUTPUTFILE = "uiuctex_cv_1.txt"
 
 def cross_validate(dataset, feat_ex, classifier):
+    print(OUTPUTFILE)
     print('# Loading dataset')
     imgs = memory.cache(dataset.imgs)()
 
@@ -67,11 +71,11 @@ def cross_validate(dataset, feat_ex, classifier):
     return mean
 
 
-def run():
+def run(dataset):
     # Select dataset
 #    dataset = data.CUReTGray()
 #    dataset = data.KTH_TIPS()
-    dataset = data.UIUCTex()
+#    dataset = data.UIUCTex()
 
     # Select feature extractor
     opts_bif = {
@@ -123,10 +127,11 @@ def run():
     #                          17, 19, 21, 24, 26, 28, 32, 34, 37, 43, 47, 49,
     #                          52, 60]) - 1
 
+    train_classes.sort()
 
-    #classifier = classification.VarmaZissermanClassifier(
-    #    build_classes = build_classes, train_classes = train_classes)
-    classifier = classification.VarmaZissermanClassifier()
+    classifier = classification.VarmaZissermanClassifier(
+        build_classes = build_classes, train_classes = train_classes)
+    #classifier = classification.VarmaZissermanClassifier()
 
 
 #    imgs = memory.cache(dataset.imgs)()
@@ -145,4 +150,10 @@ def bhattacharyya(x, y):
     return (1 - np.dot(np.sqrt(x), np.sqrt(y.T)))**2
 
 if __name__ == '__main__':
-    run()
+    datasets = [data.CUReTGray(), data.UIUCTex(), data.KTH_TIPS()]
+
+    for d in datasets:
+        OUTPUTFILE = "{}_cv_{}_test.txt".format(d.name,
+                                           strftime("%Y-%m-%d_%H-%M-%S"))
+        run(d)
+        del d
