@@ -6,7 +6,7 @@ os.environ['CACHE_ROOT'] = '../cache'
 os.environ['TEXTURE_DATA_ROOT'] = '../data'
 os.environ['RESULTS_ROOT'] = '../results'
 os.environ['VERBOSITY'] = '0'
-os.environ['N_THREADS'] = '3'
+os.environ['N_THREADS'] = '32'
 
 import numpy as np
 
