@@ -19,7 +19,6 @@ from sklearn.cluster import MiniBatchKMeans as k_means
 
 from features import TextureModel
 
-from IPython import embed
 
 def bhattacharyya(x, y):
     return (1 - np.dot(np.sqrt(x), np.sqrt(y.T)))**2
@@ -85,17 +84,10 @@ def compute_dists(model, ref_models):
             m = model.get()
         except:
             print("model.get() failed!")
-            embed()
     else:
         m = model
 
-    try:
-        res = st.chisquare(m + 1, ref_models + 1, axis=1)[0]
-    except:
-        embed("Something is wrong with m!")
-
-    return res
-    #return st.chisquare(model + 1, ref_models + 1, axis=1)[0]
+    return st.chisquare(m + 1, ref_models + 1, axis=1)[0]
 
 
 class VarmaZissermanClassifier(BaseEstimator):
@@ -256,12 +248,6 @@ class VarmaZissermanClassifier(BaseEstimator):
 
             models = Parallel(n_jobs=n_threads, verbose=verbosity)(
                 delayed(texture_fit_wrapper)(tm, image) for image in X)
-
-            try:
-                r = [model.get() for model in models]
-            except:
-                print("Running model.get() on all models failed!")
-                embed()
 
             # Find the nearest learned model:
             dists = np.array([compute_dists(model, self.models) for model in

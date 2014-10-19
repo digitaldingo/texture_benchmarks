@@ -28,7 +28,6 @@ memory = Memory(cachedir=os.environ['CACHE_ROOT'],
 OUTPUTFILE = "uiuctex_cv_1.txt"
 
 def cross_validate(dataset, feat_ex, classifier):
-    print(OUTPUTFILE)
     print('# Loading dataset')
     imgs = memory.cache(dataset.imgs)()
 
@@ -129,9 +128,9 @@ def run(dataset):
 
     train_classes.sort()
 
-    classifier = classification.VarmaZissermanClassifier(
-        build_classes = build_classes, train_classes = train_classes)
-    #classifier = classification.VarmaZissermanClassifier()
+    #classifier = classification.VarmaZissermanClassifier(
+    #    build_classes = build_classes, train_classes = train_classes)
+    classifier = classification.VarmaZissermanClassifier()
 
 
 #    imgs = memory.cache(dataset.imgs)()
